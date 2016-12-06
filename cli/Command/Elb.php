@@ -63,7 +63,7 @@ class Elb extends Command {
     }
 
     private function restartDaemons() {
-        exec('supervisorctl restart all');
+        exec('supervisorctl restart daemon:*');
     }
 
     /**
@@ -120,60 +120,69 @@ class Elb extends Command {
         $currentElbFqdn = $input->getArgument('currentElbFqdn');
         $ipAddr = gethostbynamel($currentElbFqdn);
 
-        $logger->info('Checking Connected Host', ['fqdn' => $currentElbFqdn, 'ipaddr' => $ipAddr]);
+        $logger->info('Connected Host', ['fqdn' => $currentElbFqdn, 'ipaddr' => $ipAddr]);
 
-        foreach ($input->getArgument('elbList') as $index => $elb) {
-            $logger->debug('Checking ELB', ['index' => $index]);
+        while (true) {
+            $logger->debug('Starting check loop');
+            foreach ($input->getArgument('elbList') as $index => $elb) {
+                $logger->debug('Checking ELB', ['index' => $index]);
 
-            if (! isset($this->elbList[$index])) {
-                $logger->debug('Retrieving ELB details');
-                $describe = $this->elbDescribe($elb);
-                if (empty($describe)) {
-                    $logger->error('Failed to retrieve ELB details');
-                    continue;
+                if (! isset($this->elbList[$index])) {
+                    $logger->debug('Retrieving ELB details');
+                    $describe = $this->elbDescribe($elb);
+                    if (empty($describe)) {
+                        $logger->error('Failed to retrieve ELB details');
+                        continue;
+                    }
+
+                    $this->elbList[$index] = $describe;
                 }
 
-                $this->elbList[$index] = $describe;
-            }
-
-            if ((isset($this->elbList[$index])) && (! isset($this->ipList[$index]))) {
-                $logger->debug('Resolving ELB IP address');
-                $this->ipList[$index] = gethostbynamel($this->elbList[$index]);
-            }
-
-            $logger->info(
-                'ELB',
-                [
-                    'index' => $index,
-                    'elb' => $elb,
-                    'fqdn' => $this->elbList[$index],
-                    'ipaddr' => $this->ipList[$index]
-                ]
-            );
-
-            if ((! empty($this->ipList[$index])) && (! empty(array_intersect($ipAddr, $this->ipList[$index])))) {
-                $logger->info('ELB match', ['index' => $index, 'elb' => $elb]);
-                $environment = $this->elbEnvironment($elb);
-                if (empty($environment)) {
-                    $logger->error('Could not retrieve ELB environment');
-                    return;
+                if ((isset($this->elbList[$index])) && (! isset($this->ipList[$index]))) {
+                    $logger->debug('Resolving ELB IP address');
+                    $this->ipList[$index] = gethostbynamel($this->elbList[$index]);
                 }
 
-                if ($currentEnvironment !== $environment) {
-                    $logger->warning(
-                        'Environments do not match, restarting',
-                        [
-                            'curr' => $currentEnvironment,
-                            'elb' => $environment
-                        ]
-                    );
-                    $this->restartDaemons();
-                }
+                $logger->info(
+                    'ELB',
+                    [
+                        'index' => $index,
+                        'elb' => $elb,
+                        'fqdn' => $this->elbList[$index],
+                        'ipaddr' => $this->ipList[$index]
+                    ]
+                );
 
-                return;
+                if ((! empty($this->ipList[$index])) && (! empty(array_intersect($ipAddr, $this->ipList[$index])))) {
+                    $logger->info('ELB match', ['index' => $index, 'elb' => $elb]);
+                    $environment = $this->elbEnvironment($elb);
+                    if (empty($environment)) {
+                        $logger->error('Could not retrieve ELB environment');
+                        sleep(10);
+                        continue 2;
+                    }
+
+                    if ($currentEnvironment !== $environment) {
+                        $logger->warning(
+                            'Environments do not match, restarting',
+                            [
+                                'curr' => $currentEnvironment,
+                                'elb' => $environment
+                            ]
+                        );
+                        $this->restartDaemons();
+                        sleep(60);
+                        $ipAddr = gethostbynamel($currentElbFqdn);
+                        $logger->info('Updated Host', ['fqdn' => $currentElbFqdn, 'ipaddr' => $ipAddr]);
+                    }
+
+                    sleep(30);
+                    continue 2;
+                }
             }
+
+            $logger->alert('Could not match ELB hosts');
+            sleep(30);
         }
-
-        $logger->alert('Could not match ELB hosts');
     }
 }
