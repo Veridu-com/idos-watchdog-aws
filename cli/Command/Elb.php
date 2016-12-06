@@ -51,7 +51,7 @@ class Elb extends Command {
     private function elbEnvironment(string $name) : string {
         $return = exec(
             sprintf(
-                'aws elb describe-tags --load-balancer-name %s --output text | grep ENVIRONMENT_EB | awk \'{print $3}\'',
+                'aws elb describe-tags --load-balancer-name %s --output text --region us-east-1 | grep ENVIRONMENT_EB | awk \'{print $3}\'',
                 $name
             )
         );
