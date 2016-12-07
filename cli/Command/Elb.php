@@ -164,14 +164,16 @@ class Elb extends Command {
 
                     if ($currentEnvironment !== $environment) {
                         $logger->warning(
-                            'Environments do not match, restarting',
+                            'Environments do not match',
                             [
                                 'curr' => $currentEnvironment,
                                 'elb' => $environment
                             ]
                         );
+                        sleep(30);
+                        $logger->info('Restarting daemons');
                         $this->restartDaemons();
-                        sleep(60);
+                        sleep(30);
                         $ipAddr = gethostbynamel($currentElbFqdn);
                         $logger->info('Updated Host', ['fqdn' => $currentElbFqdn, 'ipaddr' => $ipAddr]);
                     }
