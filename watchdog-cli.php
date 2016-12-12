@@ -14,4 +14,5 @@ mb_internal_encoding('UTF-8');
 
 $application = new Symfony\Component\Console\Application();
 $application->add(new Cli\Command\Elb());
+$application->add(new Cli\Command\Health());
 $application->run();
