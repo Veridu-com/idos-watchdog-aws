@@ -74,7 +74,7 @@ class Elb extends Command {
      */
     protected function configure() {
         $this
-            ->setName('elb:check')
+            ->setName('check:elb')
             ->setDescription('AWS WatchDog - Check for ELB Changes')
             ->addOption(
                 'logFile',
@@ -109,7 +109,7 @@ class Elb extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $logger  = new Monolog('Watchdog');
+        $logger  = new Monolog('ELB');
         $logger
             ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
