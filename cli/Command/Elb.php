@@ -99,7 +99,7 @@ class Elb extends Command {
             );
     }
 
-   /**
+    /**
      * Command Execution.
      *
      * @param Symfony\Component\Console\Input\InputInterface   $input
@@ -109,7 +109,7 @@ class Elb extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $logger = new Monolog('Watchdog');
+        $logger  = new Monolog('Watchdog');
         $logger
             ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
@@ -122,7 +122,7 @@ class Elb extends Command {
 
         // Current ELB FQDN
         $currentElbFqdn = $input->getArgument('currentElbFqdn');
-        $ipAddr = gethostbynamel($currentElbFqdn);
+        $ipAddr         = gethostbynamel($currentElbFqdn);
 
         $logger->info('Connected Host', ['fqdn' => $currentElbFqdn, 'ipaddr' => $ipAddr]);
 
@@ -150,9 +150,9 @@ class Elb extends Command {
                 $logger->info(
                     'ELB',
                     [
-                        'index' => $index,
-                        'elb' => $elb,
-                        'fqdn' => $this->elbList[$index],
+                        'index'  => $index,
+                        'elb'    => $elb,
+                        'fqdn'   => $this->elbList[$index],
                         'ipaddr' => $this->ipList[$index]
                     ]
                 );
@@ -171,7 +171,7 @@ class Elb extends Command {
                             'Environments do not match',
                             [
                                 'curr' => $currentEnvironment,
-                                'elb' => $environment
+                                'elb'  => $environment
                             ]
                         );
                         sleep(30);
