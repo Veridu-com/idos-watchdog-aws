@@ -39,7 +39,7 @@ class Health extends Command {
             )
             ->addOption(
                 'ipAddr',
-                'ip',
+                'i',
                 InputOption::VALUE_REQUIRED,
                 'IP Address to listen on (default: all interfaces)'
             )
