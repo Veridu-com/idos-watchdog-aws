@@ -29,7 +29,7 @@ class Health extends Command {
      */
     protected function configure() {
         $this
-            ->setName('health')
+            ->setName('check:health')
             ->setDescription('AWS WatchDog - Health Check')
             ->addOption(
                 'logFile',
@@ -37,10 +37,11 @@ class Health extends Command {
                 InputOption::VALUE_REQUIRED,
                 'Path to log file'
             )
-            ->addArgument(
+            ->addOption(
+                'ipAddr',
                 'ip',
-                InputArgument::REQUIRED,
-                'Socket listen IP'
+                InputOption::VALUE_REQUIRED,
+                'IP Address to listen on (default: all interfaces)'
             )
             ->addArgument(
                 'port',
@@ -59,7 +60,7 @@ class Health extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $logger  = new Monolog('Watchdog');
+        $logger  = new Monolog('Health');
         $logger
             ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
@@ -68,42 +69,79 @@ class Health extends Command {
         $logger->debug('Initializing AWS WatchDog Health Check');
 
         // Socket listen IP and port
-        $address = $input->getArgument('ip');
-        $port    = (int) $input->getArgument('port');
+        $ipAddr = $input->getOption('ipAddr') ?? '0.0.0.0';
+        $port   = (int) $input->getArgument('port');
 
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            $logger->error('socket_create() failed: ' . socket_strerror(socket_last_error()));
+        $listenSocket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($listenSocket === false) {
+            $logger->error(
+                'socket_create() failed',
+                [
+                    'code'  => socket_last_error(),
+                    'error' => socket_strerror(socket_last_error())
+                ]
+            );
+            socket_close($listenSocket);
+
+            return;
         }
 
-        if (socket_bind($socket, $address, $port) === false) {
-            $logger->error('socket_bind() failed: ' . socket_strerror(socket_last_error($socket)));
+        if (@socket_bind($listenSocket, $ipAddr, $port) === false) {
+            $logger->error(
+                'socket_bind() failed',
+                [
+                    'code'  => socket_last_error(),
+                    'error' => socket_strerror(socket_last_error($listenSocket))
+                ]
+            );
+            socket_close($listenSocket);
+
+            return;
         }
 
-        if (socket_listen($socket) === false) {
-            $logger->error('socket_listen() failed: ' . socket_strerror(socket_last_error($socket)));
+        if (@socket_listen($listenSocket) === false) {
+            $logger->error(
+                'socket_listen() failed',
+                [
+                    'code'  => socket_last_error(),
+                    'error' => socket_strerror(socket_last_error($listenSocket))
+                ]
+            );
+            socket_close($listenSocket);
+
+            return;
         }
+
+        $logger->info('Waiting for connections', ['ipAddr' => $ipAddr, 'port' => $port]);
 
         while (true) {
-            $socketMessage = socket_accept($socket);
-            if ($socketMessage === false) {
-                $logger->error('socket_accept() failed: ' . socket_strerror(socket_last_error($socket)));
+            $remoteSocket = @socket_accept($listenSocket);
+            if ($remoteSocket === false) {
+                $logger->error(
+                    'socket_accept() failed',
+                    [
+                        'code'  => socket_last_error(),
+                        'error' => socket_strerror(socket_last_error($listenSocket))
+                    ]
+                );
                 continue;
             }
 
-            $logger->info('Accepted socket connection');
+            socket_getpeername($remoteSocket, $remoteIpAddr, $remotePort);
+
+            $logger->info('Accepted socket connection', ['ipAddr' => $remoteIpAddr, 'port' => $remotePort]);
 
             while (true) {
-                $buf = @socket_read($socketMessage, 2048, PHP_NORMAL_READ);
-                if ($buf === false) {
+                $buffer = @socket_read($remoteSocket, 4096, PHP_BINARY_READ);
+                if (empty($buffer)) {
                     break;
                 }
-            };
+            }
 
             $logger->info('Socket connection closed');
-            socket_close($socketMessage);
-        };
+            socket_close($remoteSocket);
+        }
 
-        socket_close($socket);
+        socket_close($listenSocket);
     }
 }
